@@ -57,9 +57,8 @@ void zed2_chasing_utils::Zed2ChasingServer::ZedSyncCallback(
   chasing_info_manager_.SetObjectPose(this->tfObjectCallback(zed_object_detection));
   chasing_info_manager_.SetDecompressedDepth(this->DecompressDepthPng(compressed_depth_image));
   chasing_info_manager_.SetDepthImageHeader(this->GetDepthImageHeader(compressed_depth_image));
-  //  printf("Compressed Depth Image Stamp:[sec] %d",compressed_depth_image.header.stamp.sec);
-  //  printf(" [nanosec]: %d\n",compressed_depth_image.header.stamp.nanosec);
   chasing_info_manager_.DepthCallback(camera_info, zed_object_detection);
+
   if ((not isnan(chasing_info_manager_.GetObjectPose().getTranslation().x)) and
       (not isnan(chasing_info_manager_.GetObjectPose().getTranslation().y)) and
       (not isnan(chasing_info_manager_.GetObjectPose().getTranslation().z)))
