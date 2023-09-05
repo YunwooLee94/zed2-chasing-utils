@@ -28,6 +28,9 @@ void zed2_chasing_utils::ChasingInfoManager::DepthCallback(
   drone_state_.pcl_objects_removed.header.frame_id = param_.global_frame_id;
   drone_state_.pcl_objects_removed.header.stamp = depth_image_header_.stamp;
 
+//  printf("Decompressed Depth Image Raws %d \n",decomp_depth_image_.rows);
+//  printf("Decompressed Depth Image Cols %d \b",decomp_depth_image_.cols);
+
   int rGlobalMin = 0;
   int cGlobalMin = 0;
   int rGlobalMax = decomp_depth_image_.rows - 1;
@@ -38,16 +41,16 @@ void zed2_chasing_utils::ChasingInfoManager::DepthCallback(
   int cMax = cGlobalMax;
   for (int idx = 0; idx < zed_od.objects.size(); idx++) {
     rMin =
-        std::max(int(zed_od.objects[idx].bounding_box_2d.corners[0].kp[1]) - param_.mask_padding_y,
+        std::max(int(zed_od.objects[idx].bounding_box_2d.corners[0].kp[1])/2 - param_.mask_padding_y,
                  rGlobalMin);
     cMin =
-        std::max(int(zed_od.objects[idx].bounding_box_2d.corners[0].kp[0]) - param_.mask_padding_x,
+        std::max(int(zed_od.objects[idx].bounding_box_2d.corners[0].kp[0])/2 - param_.mask_padding_x,
                  cGlobalMin);
     rMax =
-        std::min(int(zed_od.objects[idx].bounding_box_2d.corners[2].kp[1]) + param_.mask_padding_y,
+        std::min(int(zed_od.objects[idx].bounding_box_2d.corners[2].kp[1])/2 + param_.mask_padding_y,
                  rGlobalMax);
     cMax =
-        std::min(int(zed_od.objects[idx].bounding_box_2d.corners[2].kp[0]) + param_.mask_padding_x,
+        std::min(int(zed_od.objects[idx].bounding_box_2d.corners[2].kp[0])/2 + param_.mask_padding_x,
                  cGlobalMax);
 
     const float NaN = std::numeric_limits<float>::quiet_NaN();
@@ -63,6 +66,7 @@ void zed2_chasing_utils::ChasingInfoManager::DepthCallback(
     drone_state_.bbox_2d[3] = cMax;
   }
   if (zed_od.objects.empty()) {
+    printf("NO OBJECT \n");
     const float NaN = std::numeric_limits<float>::quiet_NaN();
     // Depth Image Masking
     for (int r = drone_state_.bbox_2d[0]; r < drone_state_.bbox_2d[2]; r++) {
@@ -76,6 +80,7 @@ void zed2_chasing_utils::ChasingInfoManager::DepthCallback(
   for (int r = 0; r < decomp_depth_image_.rows; r += param_.pcl_stride) {
     for (int c = 0; c < decomp_depth_image_.cols; c += param_.pcl_stride) {
       float d = decomp_depth_image_.ptr<float>(r)[c];
+//      printf("Depth values %f \n",d);
       if (not isnan(d)) {
         pcl_pts[2] = (float)(d / camera_factor);
         pcl_pts[0] = (float)((c - camera_cx) * pcl_pts[2] / camera_fx);
@@ -90,6 +95,7 @@ void zed2_chasing_utils::ChasingInfoManager::DepthCallback(
       }
     }
   }
+//  printf("The number of Corrected Points %d \n",(int) drone_state_.pcl_objects_removed.points.size());
 }
 void zed2_chasing_utils::ChasingInfoManager::SetPose(const zed2_chasing_utils::Pose &pose) {
   drone_state_.T_wc = pose;

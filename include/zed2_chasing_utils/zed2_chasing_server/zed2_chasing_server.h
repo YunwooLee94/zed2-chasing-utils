@@ -53,16 +53,16 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::PointCloud>::SharedPtr masked_points_publisher_;
   rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr object_position_publisher_;
 
-  void ZedSyncCallback(const sensor_msgs::msg::CompressedImage &compressed_depth_image,
+  void ZedSyncCallback(const sensor_msgs::msg::CompressedImage::SharedPtr &compressed_depth_image,
                        const sensor_msgs::msg::CameraInfo &camera_info,
                        const zed_interfaces::msg::ObjectsStamped &zed_od);
 
-  Pose tfCallBack(const sensor_msgs::msg::CompressedImage &compressed_depth_image);
+  Pose tfCallBack(const sensor_msgs::msg::CompressedImage::SharedPtr &compressed_depth_image);
   Pose tfObjectCallback(const zed_interfaces::msg::ObjectsStamped &object_stamped);
-  cv::Mat DecompressDepthPng(const sensor_msgs::msg::CompressedImage &depth_image);
+  cv::Mat DecompressDepthPng(const sensor_msgs::msg::CompressedImage::ConstSharedPtr &depth_image);
   static std_msgs::msg::Header
-  GetDepthImageHeader(const sensor_msgs::msg::CompressedImage &depth_image) {
-    return depth_image.header;
+  GetDepthImageHeader(const sensor_msgs::msg::CompressedImage::SharedPtr &depth_image) {
+    return depth_image->header;
   }
 
   Pose GetPoseFromGeometryMsgs(const geometry_msgs::msg::PoseStamped &pose_stamped);

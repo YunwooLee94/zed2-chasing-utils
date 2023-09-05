@@ -9,7 +9,7 @@
 #include "image_transport/image_transport.hpp"
 #include "sensor_msgs/msg/compressed_image.hpp"
 #include "sensor_msgs/msg/image.hpp"
-
+#include <iostream>
 // #include "pcl_ros/point_cloud.hpp"
 // #include "pcl_ros/transforms.hpp"
 #include "tf2_ros/transform_broadcaster.h"
@@ -19,6 +19,8 @@
 // #include "pcl_ros/transforms.hpp"
 // #include "pcl
 // #include "pcl-1.10/pcl/point_cloud.h"
+
+
 #include "compressed_depth_image_transport/codec.h"
 #include "compressed_depth_image_transport/compression_common.h"
 #include "compressed_image_transport/compression_common.h"

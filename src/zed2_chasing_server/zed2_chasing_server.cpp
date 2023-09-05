@@ -50,7 +50,7 @@ zed2_chasing_utils::Zed2ChasingServer::Zed2ChasingServer()
 }
 
 void zed2_chasing_utils::Zed2ChasingServer::ZedSyncCallback(
-    const sensor_msgs::msg::CompressedImage &compressed_depth_image,
+    const sensor_msgs::msg::CompressedImage::SharedPtr &compressed_depth_image,
     const sensor_msgs::msg::CameraInfo &camera_info,
     const zed_interfaces::msg::ObjectsStamped &zed_object_detection) {
   chasing_info_manager_.SetPose(this->tfCallBack(compressed_depth_image));
@@ -68,16 +68,16 @@ void zed2_chasing_utils::Zed2ChasingServer::ZedSyncCallback(
     masked_points_publisher_->publish(chasing_info_manager_.GetMaskedPointCloud());
   masked_depth_image_publisher_.publish(GetRosMsgsFromImage(
       chasing_info_manager_.GetMaskedImage(), sensor_msgs::image_encodings::TYPE_32FC1,
-      compressed_depth_image.header.frame_id, compressed_depth_image.header.stamp));
+      compressed_depth_image->header.frame_id, compressed_depth_image->header.stamp));
 }
 zed2_chasing_utils::Pose zed2_chasing_utils::Zed2ChasingServer::tfCallBack(
-    const sensor_msgs::msg::CompressedImage &compressed_depth_image) {
-  rclcpp::Time current_sensor_time = compressed_depth_image.header.stamp;
+    const sensor_msgs::msg::CompressedImage::SharedPtr &compressed_depth_image) {
+  rclcpp::Time current_sensor_time = compressed_depth_image->header.stamp;
   zed_call_time_ = current_sensor_time;
   geometry_msgs::msg::TransformStamped transfrom_temp;
   try {
     transfrom_temp = tf_buffer_->lookupTransform(
-        param_.global_frame_id, compressed_depth_image.header.frame_id, current_sensor_time);
+        param_.global_frame_id, compressed_depth_image->header.frame_id, current_sensor_time);
     is_camera_pose_received_ = true;
     return GetPoseFromTfMsgs(transfrom_temp);
   } catch (const tf2::TransformException &ex) {
@@ -97,69 +97,45 @@ zed2_chasing_utils::Pose zed2_chasing_utils::Zed2ChasingServer::tfObjectCallback
   bool is_nan_head_pos = false;
   for (int idx = 0; idx < object_stamped.objects.size(); idx++) {
     for (int i = 0; i < 3; i++) {
-      if (isnan(object_stamped.objects[idx].head_position[i]))
+      if (isnan(object_stamped.objects[idx].head_position[i])) {
         is_nan_head_pos = true;
+      }
     }
     if (not is_nan_head_pos) {
       temp_x = object_stamped.objects[idx].head_position[0];
       temp_y = object_stamped.objects[idx].head_position[1];
       temp_z = object_stamped.objects[idx].head_position[2];
     } else {
-      bool is_nan_head_bbox = false;
+      bool is_nan_body_bbox = false;
       for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 3; j++) {
-          if (isnan(object_stamped.objects[idx].head_bounding_box_3d.corners[i].kp[j]))
-            is_nan_head_bbox = true;
+          if (isnan(object_stamped.objects[idx].bounding_box_3d.corners[i].kp[j])) {
+            is_nan_body_bbox = true;
+          }
         }
       }
-      if (not is_nan_head_bbox) {
-        std::vector<Point> head_bbox;
+      if (not is_nan_body_bbox) {
+        std::vector<Point> body_bbox;
         Point tempCorners{0.0, 0.0, 0.0};
-        for (auto elem : object_stamped.objects[idx].head_bounding_box_3d.corners) {
+        for (auto elem : object_stamped.objects[idx].bounding_box_3d.corners) {
           tempCorners.x = elem.kp[0];
           tempCorners.y = elem.kp[1];
           tempCorners.z = elem.kp[2];
-          head_bbox.push_back(tempCorners);
+          body_bbox.push_back(tempCorners);
         }
-        for (auto &i : head_bbox) {
+        for (auto &i : body_bbox) {
           temp_x += i.x;
           temp_y += i.y;
           temp_z += i.z;
         }
-        temp_x = temp_x / (float)head_bbox.size();
-        temp_y = temp_y / (float)head_bbox.size();
-        temp_z = temp_z / (float)head_bbox.size();
+        temp_x = temp_x / (float)body_bbox.size();
+        temp_y = temp_y / (float)body_bbox.size();
+        temp_z = temp_z / (float)body_bbox.size();
       } else {
-        bool is_nan_body_bbox = false;
-        for (int i = 0; i < 8; i++) {
-          for (int j = 0; j < 3; j++) {
-            if (isnan(object_stamped.objects[idx].bounding_box_3d.corners[i].kp[j]))
-              is_nan_body_bbox = true;
-          }
-        }
-        if (not is_nan_body_bbox) {
-          std::vector<Point> body_bbox;
-          Point tempCorners{0.0, 0.0, 0.0};
-          for (auto elem : object_stamped.objects[idx].bounding_box_3d.corners) {
-            tempCorners.x = elem.kp[0];
-            tempCorners.y = elem.kp[1];
-            tempCorners.z = elem.kp[2];
-            body_bbox.push_back(tempCorners);
-          }
-          for (auto &i : body_bbox) {
-            temp_x += i.x;
-            temp_y += i.y;
-            temp_z += i.z;
-          }
-          temp_x = temp_x / (float)body_bbox.size();
-          temp_y = temp_y / (float)body_bbox.size();
-          temp_z = temp_z / (float)body_bbox.size();
-        } else {
-          const float NaN = std::numeric_limits<float>::quiet_NaN();
-          temp_x = NaN;
-          temp_y = NaN;
-          temp_z = NaN;
-        }
+        const float NaN = std::numeric_limits<float>::quiet_NaN();
+        temp_x = NaN;
+        temp_y = NaN;
+        temp_z = NaN;
       }
     }
   }
@@ -171,21 +147,24 @@ zed2_chasing_utils::Pose zed2_chasing_utils::Zed2ChasingServer::tfObjectCallback
   }
   Pose tempPose;
   tempPose.setTranslation(temp_x, temp_y, temp_z);
+  //  std::cout << "OBJECT POS X: " << temp_x << " Y: " << temp_y << " Z: " << temp_z << std::endl;
   tempPose.setRotation(Eigen::Quaternionf(1.0, 0.0, 0.0, 0.0));
   return tempPose;
 }
 cv::Mat zed2_chasing_utils::Zed2ChasingServer::DecompressDepthPng(
-    const sensor_msgs::msg::CompressedImage &depth_image) {
+    const sensor_msgs::msg::CompressedImage::ConstSharedPtr &depth_image) {
   cv::Mat decompressedTemp;
   cv::Mat decompressed;
-  const size_t split_pos = depth_image.format.find(';');
-  const std::string image_encoding = depth_image.format.substr(0, split_pos);
+  const size_t split_pos = depth_image->format.find(';');
+  const std::string image_encoding = depth_image->format.substr(0, split_pos);
 
-  if (depth_image.data.size() > sizeof(compressed_depth_image_transport::ConfigHeader)) {
+  if (depth_image->data.size() > sizeof(compressed_depth_image_transport::ConfigHeader)) {
     compressed_depth_image_transport::ConfigHeader compressionConfig{};
-    memcpy(&compressionConfig, &depth_image.data[0], sizeof(compressionConfig));
-    const std::vector<uint8_t> imageData(depth_image.data.begin() + sizeof(compressionConfig),
-                                         depth_image.data.end());
+    memcpy(&compressionConfig, &depth_image->data[0], sizeof(compressionConfig));
+
+//    compressionConfig.format = depth_image->format.data();
+    const std::vector<uint8_t> imageData(depth_image->data.begin() + sizeof(compressionConfig),
+                                         depth_image->data.end());
 
     if (sensor_msgs::image_encodings::bitDepth(image_encoding) == 32)
       try {
@@ -195,6 +174,7 @@ cv::Mat zed2_chasing_utils::Zed2ChasingServer::DecompressDepthPng(
         is_depth_image_received_ = false;
         return (cv::Mat(1, 1, CV_32FC1));
       }
+
     size_t rows = decompressedTemp.rows;
     size_t cols = decompressedTemp.cols;
 
@@ -208,6 +188,10 @@ cv::Mat zed2_chasing_utils::Zed2ChasingServer::DecompressDepthPng(
 
       float depthQuantA = compressionConfig.depthParam[0];
       float depthQuantB = compressionConfig.depthParam[1];
+      std::cout<<"DEPTH QUANT A: "<<depthQuantA<<std::endl;
+      std::cout<<"DEPTH QUANT B: "<<depthQuantB<<std::endl;
+      depthQuantA = 10100.0f; //TODO: Set value automatically
+      depthQuantB = -1009.0f;
 
       for (; (itDepthImg != itDepthImg_end) && (itInvDepthImg != itInvDepthImg_end);
            ++itDepthImg, ++itInvDepthImg) {
@@ -219,6 +203,7 @@ cv::Mat zed2_chasing_utils::Zed2ChasingServer::DecompressDepthPng(
         }
       }
       is_depth_image_received_ = true;
+//      printf("is_depth_image_received %d\n", is_depth_image_received_);
       return decompressed;
     } else {
       is_depth_image_received_ = false;
